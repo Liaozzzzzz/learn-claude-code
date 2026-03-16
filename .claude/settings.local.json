@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod:*)",
+      "Bash(go test:*)",
+      "Bash(go run:*)",
+      "Bash(go get:*)",
+      "Bash(export:*)",
+      "WebSearch",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
