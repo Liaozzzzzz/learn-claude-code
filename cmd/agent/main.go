@@ -15,8 +15,18 @@ func main() {
 	// Load .env file
 	loadEnv(".env")
 
-	// Create registry with todo tool
-	registry, _ := tools.DefaultRegistryWithTodo()
+	// Get working directory
+	workDir, _ := os.Getwd()
+
+	// Get skills directory (can be customized via environment variable)
+	skillsDir := os.Getenv("SKILLS_DIR")
+	if skillsDir == "" {
+		// Default to skills directory relative to working directory
+		skillsDir = "skills"
+	}
+
+	// Create registry with todo and skills
+	registry, _, skillLoader := tools.DefaultRegistryWithTodoAndSkills(workDir, skillsDir)
 
 	// Get child tools for subagent (excludes task to prevent recursion)
 	childToolDefs := registry.GetChildToolDefinitions()
@@ -24,8 +34,10 @@ func main() {
 	// Create client from environment variables
 	client := agent.NewOpenAIClientFromEnv()
 
+	// Build system prompt with skill descriptions
+	system := buildSystemPrompt(workDir, skillLoader)
+
 	// Create agent first (will register task tool later)
-	system := fmt.Sprintf("You are a coding agent at %s. Use the todo tool to plan multi-step tasks. Use the task tool to delegate exploration or subtasks. Prefer tools over prose.", mustGetwd())
 	ag := agent.New(client, registry.AsExecutor(), system, nil)
 
 	// Register task tool with a subagent run function
@@ -50,6 +62,9 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	fmt.Println("Agent CLI (type 'q' or 'exit' to quit)")
+	if skillLoader.HasSkills() {
+		fmt.Printf("Skills loaded: %s\n", strings.Join(skillLoader.SkillNames(), ", "))
+	}
 	fmt.Println()
 
 	for {
@@ -96,12 +111,22 @@ func main() {
 	fmt.Println("Goodbye!")
 }
 
-func mustGetwd() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		return "."
+// buildSystemPrompt builds the system prompt with skill descriptions.
+func buildSystemPrompt(workDir string, skillLoader *tools.SkillLoader) string {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("You are a coding agent at %s. ", workDir))
+	sb.WriteString("Use the todo tool to plan multi-step tasks. ")
+	sb.WriteString("Use the task tool to delegate exploration or subtasks. ")
+	sb.WriteString("Prefer tools over prose. ")
+
+	if skillLoader.HasSkills() {
+		sb.WriteString("\n\nSkills available:\n")
+		sb.WriteString(skillLoader.GetDescriptions())
+		sb.WriteString("\n\nUse load_skill to access specialized knowledge before tackling unfamiliar topics.")
 	}
-	return wd
+
+	return sb.String()
 }
 
 // loadEnv loads environment variables from a .env file

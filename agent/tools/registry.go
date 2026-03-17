@@ -118,6 +118,23 @@ func DefaultRegistryWithTodo() (*Registry, *TodoManager) {
 	return NewRegistryWithWorkDirAndTodo(workDir)
 }
 
+// DefaultRegistryWithTodoAndSkills creates a registry with all standard tools including todo and skills.
+func DefaultRegistryWithTodoAndSkills(workDir, skillsDir string) (*Registry, *TodoManager, *SkillLoader) {
+	r := NewRegistryWithWorkDir(workDir)
+
+	// Create and register todo tool
+	todoManager := NewTodoManager()
+	r.Register("todo", TodoDefinition(), NewTodoHandler(todoManager))
+
+	// Create and register skill tool
+	skillLoader := NewSkillLoader(skillsDir)
+	if skillLoader.HasSkills() {
+		r.Register("load_skill", SkillDefinition(), NewSkillHandler(skillLoader))
+	}
+
+	return r, todoManager, skillLoader
+}
+
 // NewRegistryWithWorkDirAndTodo creates a registry with all standard tools including todo.
 func NewRegistryWithWorkDirAndTodo(workDir string) (*Registry, *TodoManager) {
 	r := NewRegistryWithWorkDir(workDir)

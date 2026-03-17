@@ -133,6 +133,9 @@ type openAIChoice struct {
 
 // CreateMessage sends a message to the OpenAI-compatible API.
 func (c *OpenAIClient) CreateMessage(ctx context.Context, system string, messages []Message, tools []Tool) (*Response, error) {
+	// fmt.Printf("=================>messages: %v\n", "start")
+	// fmt.Printf("=================>messages: %v\n", messages)
+	// fmt.Printf("=================>messages: %v\n", "end")
 	// Convert messages to OpenAI format
 	openAIMessages := make([]openAIMessage, 0, len(messages)+1)
 
@@ -284,6 +287,10 @@ func (c *OpenAIClient) CreateMessage(ctx context.Context, system string, message
 	if stopReason == "tool_calls" {
 		stopReason = "tool_use"
 	}
+
+	// fmt.Printf("=================>content: %v\n", "start")
+	// fmt.Printf("=================>content: %v, stopReason:%v\n", content, stopReason)
+	// fmt.Printf("=================>content: %v\n", "end")
 
 	return &Response{
 		Content:    content,
