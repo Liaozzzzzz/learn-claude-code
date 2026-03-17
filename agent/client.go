@@ -133,7 +133,6 @@ type openAIChoice struct {
 
 // CreateMessage sends a message to the OpenAI-compatible API.
 func (c *OpenAIClient) CreateMessage(ctx context.Context, system string, messages []Message, tools []Tool) (*Response, error) {
-	fmt.Printf("Sending messages to OpenAI API: %d \n", len(messages))
 	// Convert messages to OpenAI format
 	openAIMessages := make([]openAIMessage, 0, len(messages)+1)
 

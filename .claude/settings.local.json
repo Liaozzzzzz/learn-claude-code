@@ -9,7 +9,8 @@
       "WebSearch",
       "Bash(curl:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cd:*)"
     ]
   }
 }
