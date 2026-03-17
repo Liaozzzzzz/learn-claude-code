@@ -57,6 +57,14 @@ func main() {
 		Message:   "<reminder>Update your todos.</reminder>",
 	}
 
+	// Configure context compaction
+	compactConfig := &agent.CompactConfig{
+		Threshold:     50000,
+		KeepRecent:    3,
+		TranscriptDir: ".transcripts",
+		WorkDir:      workDir,
+	}
+
 	// Interactive REPL
 	history := []agent.Message{}
 	scanner := bufio.NewScanner(os.Stdin)
@@ -88,8 +96,8 @@ func main() {
 			Content: query,
 		})
 
-		// Run agent with nag reminder
-		if err := ag.RunWithNag(context.Background(), &history, nagConfig); err != nil {
+		// Run agent with nag reminder and context compaction
+		if err := ag.RunWithNagAndCompact(context.Background(), &history, nagConfig, compactConfig); err != nil {
 			fmt.Printf("\033[31mError: %v\033[0m\n", err)
 			continue
 		}

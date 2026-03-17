@@ -132,6 +132,23 @@ func DefaultRegistryWithTodoAndSkills(workDir, skillsDir string) (*Registry, *To
 		r.Register("load_skill", SkillDefinition(), NewSkillHandler(skillLoader))
 	}
 
+	// Register compact tool (handler is a placeholder - actual logic in agent loop)
+	r.RegisterFunc("compact", Definition{
+		Name:        "compact",
+		Description: "Trigger manual conversation compression to reduce context size.",
+		InputSchema: InputSchema{
+			Type: "object",
+			Properties: map[string]Property{
+				"focus": {
+					Type:        "string",
+					Description: "What to preserve in the summary",
+				},
+			},
+		},
+	}, func(input map[string]interface{}) (string, error) {
+		return "Compressing...", nil
+	})
+
 	return r, todoManager, skillLoader
 }
 
