@@ -128,3 +128,21 @@ func NewRegistryWithWorkDirAndTodo(workDir string) (*Registry, *TodoManager) {
 
 	return r, todoManager
 }
+
+// BaseToolNames returns the names of base tools (excluding task).
+var BaseToolNames = []string{"bash", "read_file", "write_file", "edit_file"}
+
+// ChildToolNames returns the names of tools available to subagents.
+// This excludes task to prevent recursive spawning.
+var ChildToolNames = []string{"bash", "read_file", "write_file", "edit_file", "todo"}
+
+// GetChildToolDefinitions returns definitions for subagent tools (without task).
+func (r *Registry) GetChildToolDefinitions() []Definition {
+	var defs []Definition
+	for _, name := range ChildToolNames {
+		if def, ok := r.definitions[name]; ok {
+			defs = append(defs, def)
+		}
+	}
+	return defs
+}

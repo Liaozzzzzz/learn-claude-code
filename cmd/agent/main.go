@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-
 	"os"
 	"strings"
 
@@ -19,14 +18,25 @@ func main() {
 	// Create registry with todo tool
 	registry, _ := tools.DefaultRegistryWithTodo()
 
-	agentTools := agent.ToTools(registry.Tools())
+	// Get child tools for subagent (excludes task to prevent recursion)
+	childToolDefs := registry.GetChildToolDefinitions()
 
 	// Create client from environment variables
 	client := agent.NewOpenAIClientFromEnv()
 
-	// Create agent with system prompt
-	system := fmt.Sprintf("You are a coding agent at %s. Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done. Prefer tools over prose.", mustGetwd())
-	ag := agent.New(client, registry.AsExecutor(), system, agentTools)
+	// Create agent first (will register task tool later)
+	system := fmt.Sprintf("You are a coding agent at %s. Use the todo tool to plan multi-step tasks. Use the task tool to delegate exploration or subtasks. Prefer tools over prose.", mustGetwd())
+	ag := agent.New(client, registry.AsExecutor(), system, nil)
+
+	// Register task tool with a subagent run function
+	taskHandler := tools.NewTaskHandler(func(ctx context.Context, prompt string) (string, error) {
+		return ag.RunSubagent(ctx, prompt, agent.ToTools(childToolDefs))
+	})
+	registry.Register("task", tools.TaskDefinition(), taskHandler)
+
+	// Now set the agent tools (all tools including task)
+	agentTools := agent.ToTools(registry.Tools())
+	ag.Tools = agentTools
 
 	// Configure nag reminder for todo tool
 	nagConfig := &agent.NagConfig{
