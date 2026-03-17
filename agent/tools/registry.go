@@ -74,6 +74,11 @@ func (r *Registry) Names() []string {
 	return names
 }
 
+// AsExecutor returns a RegistryExecutor that implements agent.ToolExecutor.
+func (r *Registry) AsExecutor() *RegistryExecutor {
+	return &RegistryExecutor{Registry: r}
+}
+
 // DefaultRegistry creates a registry with all standard tools.
 // It uses the current working directory as the work directory.
 func DefaultRegistry() *Registry {
@@ -107,7 +112,19 @@ func NewRegistryWithWorkDir(workDir string) *Registry {
 	return r
 }
 
-// AsExecutor returns a RegistryExecutor that implements agent.ToolExecutor.
-func (r *Registry) AsExecutor() *RegistryExecutor {
-	return &RegistryExecutor{Registry: r}
+// DefaultRegistryWithTodo creates a registry with all standard tools including todo.
+func DefaultRegistryWithTodo() (*Registry, *TodoManager) {
+	workDir, _ := os.Getwd()
+	return NewRegistryWithWorkDirAndTodo(workDir)
+}
+
+// NewRegistryWithWorkDirAndTodo creates a registry with all standard tools including todo.
+func NewRegistryWithWorkDirAndTodo(workDir string) (*Registry, *TodoManager) {
+	r := NewRegistryWithWorkDir(workDir)
+
+	// Create and register todo tool
+	todoManager := NewTodoManager()
+	r.Register("todo", TodoDefinition(), NewTodoHandler(todoManager))
+
+	return r, todoManager
 }

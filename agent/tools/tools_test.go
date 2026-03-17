@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -244,4 +245,163 @@ func TestNewRegistryWithWorkDir(t *testing.T) {
 	if len(tools) != 4 {
 		t.Errorf("expected 4 tools, got %d", len(tools))
 	}
+}
+
+func TestTodoManager_Update(t *testing.T) {
+	tm := NewTodoManager()
+
+	items := []TodoItem{
+		{ID: "1", Text: "Task 1", Status: TodoPending},
+		{ID: "2", Text: "Task 2", Status: TodoInProgress},
+		{ID: "3", Text: "Task 3", Status: TodoCompleted},
+	}
+
+	result, err := tm.Update(items)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check the rendered output contains expected content
+	if len(result) == 0 {
+		t.Error("expected non-empty result")
+	}
+}
+
+func TestTodoManager_MaxItems(t *testing.T) {
+	tm := NewTodoManager()
+
+	var items []TodoItem
+	for i := 0; i < 25; i++ {
+		items = append(items, TodoItem{ID: fmt.Sprintf("%d", i), Text: "Task", Status: TodoPending})
+	}
+
+	_, err := tm.Update(items)
+	if err == nil {
+		t.Error("expected error for too many items")
+	}
+}
+
+func TestTodoManager_OnlyOneInProgress(t *testing.T) {
+	tm := NewTodoManager()
+
+	items := []TodoItem{
+		{ID: "1", Text: "Task 1", Status: TodoInProgress},
+		{ID: "2", Text: "Task 2", Status: TodoInProgress},
+	}
+
+	_, err := tm.Update(items)
+	if err == nil {
+		t.Error("expected error for multiple in_progress items")
+	}
+}
+
+func TestTodoManager_InvalidStatus(t *testing.T) {
+	tm := NewTodoManager()
+
+	items := []TodoItem{
+		{ID: "1", Text: "Task 1", Status: "invalid"},
+	}
+
+	_, err := tm.Update(items)
+	if err == nil {
+		t.Error("expected error for invalid status")
+	}
+}
+
+func TestTodoManager_EmptyText(t *testing.T) {
+	tm := NewTodoManager()
+
+	items := []TodoItem{
+		{ID: "1", Text: "", Status: TodoPending},
+	}
+
+	_, err := tm.Update(items)
+	if err == nil {
+		t.Error("expected error for empty text")
+	}
+}
+
+func TestTodoManager_Render(t *testing.T) {
+	tm := NewTodoManager()
+
+	items := []TodoItem{
+		{ID: "1", Text: "Pending task", Status: TodoPending},
+		{ID: "2", Text: "In progress task", Status: TodoInProgress},
+		{ID: "3", Text: "Completed task", Status: TodoCompleted},
+	}
+
+	_, err := tm.Update(items)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rendered := tm.Render()
+
+	// Check markers are present
+	if !containsSubstring(rendered, "[ ]") {
+		t.Error("expected pending marker [ ]")
+	}
+	if !containsSubstring(rendered, "[>]") {
+		t.Error("expected in_progress marker [>]")
+	}
+	if !containsSubstring(rendered, "[x]") {
+		t.Error("expected completed marker [x]")
+	}
+}
+
+func TestTodoHandler_Execute(t *testing.T) {
+	tm := NewTodoManager()
+	h := NewTodoHandler(tm)
+
+	input := map[string]interface{}{
+		"items": []interface{}{
+			map[string]interface{}{
+				"id":     "1",
+				"text":   "First task",
+				"status": "pending",
+			},
+			map[string]interface{}{
+				"id":     "2",
+				"text":   "Second task",
+				"status": "in_progress",
+			},
+		},
+	}
+
+	result, err := h.Execute(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result) == 0 {
+		t.Error("expected non-empty result")
+	}
+}
+
+func TestDefaultRegistryWithTodo(t *testing.T) {
+	r, tm := DefaultRegistryWithTodo()
+
+	expectedTools := []string{"bash", "read_file", "write_file", "edit_file", "todo"}
+	for _, name := range expectedTools {
+		if !r.HasTool(name) {
+			t.Errorf("expected tool %q to be registered", name)
+		}
+	}
+
+	if tm == nil {
+		t.Error("expected non-nil TodoManager")
+	}
+}
+
+func containsSubstring(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstringHelper(s, substr))
+}
+
+func containsSubstringHelper(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

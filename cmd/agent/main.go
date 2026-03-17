@@ -16,7 +16,8 @@ func main() {
 	// Load .env file
 	loadEnv(".env")
 
-	registry := tools.DefaultRegistry()
+	// Create registry with todo tool
+	registry, _ := tools.DefaultRegistryWithTodo()
 
 	agentTools := agent.ToTools(registry.Tools())
 
@@ -24,8 +25,15 @@ func main() {
 	client := agent.NewOpenAIClientFromEnv()
 
 	// Create agent with system prompt
-	system := fmt.Sprintf("You are a coding agent at %s. Use tools to solve tasks. Act, don't explain.", mustGetwd())
+	system := fmt.Sprintf("You are a coding agent at %s. Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done. Prefer tools over prose.", mustGetwd())
 	ag := agent.New(client, registry.AsExecutor(), system, agentTools)
+
+	// Configure nag reminder for todo tool
+	nagConfig := &agent.NagConfig{
+		ToolName:  "todo",
+		Threshold: 3,
+		Message:   "<reminder>Update your todos.</reminder>",
+	}
 
 	// Interactive REPL
 	history := []agent.Message{}
@@ -55,8 +63,8 @@ func main() {
 			Content: query,
 		})
 
-		// Run agent
-		if err := ag.Run(context.Background(), &history); err != nil {
+		// Run agent with nag reminder
+		if err := ag.RunWithNag(context.Background(), &history, nagConfig); err != nil {
 			fmt.Printf("\033[31mError: %v\033[0m\n", err)
 			continue
 		}
