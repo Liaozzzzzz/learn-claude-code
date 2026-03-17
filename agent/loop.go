@@ -11,6 +11,7 @@ func (a *Agent) Run(ctx context.Context, messages *[]Message) error {
 	for {
 		// Call the LLM
 		response, err := a.Client.CreateMessage(ctx, a.System, *messages, a.Tools)
+		// fmt.Printf("response:  %v\n", response)
 		if err != nil {
 			return fmt.Errorf("LLM call failed: %w", err)
 		}
@@ -20,6 +21,8 @@ func (a *Agent) Run(ctx context.Context, messages *[]Message) error {
 			Role:    "assistant",
 			Content: response.Content,
 		})
+
+		fmt.Printf("response: %v\n\n", response)
 
 		// If the model didn't call a tool, we're done
 		if response.StopReason != "tool_use" {
@@ -35,7 +38,7 @@ func (a *Agent) Run(ctx context.Context, messages *[]Message) error {
 					results = append(results, ToolResultContent{
 						Type:      "tool_result",
 						ToolUseID: block.ID,
-						Content:    err.Error(),
+						Content:   err.Error(),
 						IsError:   true,
 					})
 					continue
@@ -44,7 +47,7 @@ func (a *Agent) Run(ctx context.Context, messages *[]Message) error {
 				results = append(results, ToolResultContent{
 					Type:      "tool_result",
 					ToolUseID: block.ID,
-					Content:    output,
+					Content:   output,
 				})
 			}
 		}

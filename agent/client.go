@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -106,7 +105,7 @@ type openAIFunctionCall struct {
 }
 
 type openAITool struct {
-	Type     string           `json:"type"`
+	Type     string            `json:"type"`
 	Function openAIFunctionDef `json:"function"`
 }
 
@@ -117,10 +116,10 @@ type openAIFunctionDef struct {
 }
 
 type openAIRequest struct {
-	Model    string         `json:"model"`
-	Messages []openAIMessage `json:"messages"`
-	Tools    []openAITool   `json:"tools,omitempty"`
-	MaxTokens int           `json:"max_tokens,omitempty"`
+	Model     string          `json:"model"`
+	Messages  []openAIMessage `json:"messages"`
+	Tools     []openAITool    `json:"tools,omitempty"`
+	MaxTokens int             `json:"max_tokens,omitempty"`
 }
 
 type openAIResponse struct {
@@ -134,6 +133,7 @@ type openAIChoice struct {
 
 // CreateMessage sends a message to the OpenAI-compatible API.
 func (c *OpenAIClient) CreateMessage(ctx context.Context, system string, messages []Message, tools []Tool) (*Response, error) {
+	fmt.Printf("Sending messages to OpenAI API: %d \n", len(messages))
 	// Convert messages to OpenAI format
 	openAIMessages := make([]openAIMessage, 0, len(messages)+1)
 
@@ -290,86 +290,4 @@ func (c *OpenAIClient) CreateMessage(ctx context.Context, system string, message
 		Content:    content,
 		StopReason: stopReason,
 	}, nil
-}
-
-// DefaultTools returns the default bash tool.
-func DefaultTools() []Tool {
-	return []Tool{
-		{
-			Name:        "bash",
-			Description: "Run a shell command.",
-			InputSchema: InputSchema{
-				Type: "object",
-				Properties: map[string]Property{
-					"command": {Type: "string", Description: "The shell command to run"},
-				},
-				Required: []string{"command"},
-			},
-		},
-	}
-}
-
-// BashExecutor executes bash commands with safety checks.
-type BashExecutor struct {
-	WorkDir string
-	Timeout time.Duration
-}
-
-// NewBashExecutor creates a new bash executor.
-func NewBashExecutor(workDir string) *BashExecutor {
-	return &BashExecutor{
-		WorkDir: workDir,
-		Timeout: defaultTimeout,
-	}
-}
-
-// Execute runs a bash command.
-func (e *BashExecutor) Execute(name string, input map[string]interface{}) (string, error) {
-	if name != "bash" {
-		return "", fmt.Errorf("unknown tool: %s", name)
-	}
-
-	command, ok := input["command"].(string)
-	if !ok {
-		return "", fmt.Errorf("command must be a string")
-	}
-
-	// Safety checks
-	dangerous := []string{"rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"}
-	for _, d := range dangerous {
-		if strings.Contains(command, d) {
-			return "Error: Dangerous command blocked", nil
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), e.Timeout)
-	defer cancel()
-
-	// Use "sh -c" for compatibility across platforms
-	cmd := execCommand(ctx, "sh", "-c", command)
-	cmd.Dir = e.WorkDir
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	output := strings.TrimSpace(stdout.String() + stderr.String())
-
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "Error: Timeout", nil
-		}
-	}
-
-	// Limit output size
-	if len(output) > 50000 {
-		output = output[:50000]
-	}
-
-	if output == "" {
-		return "(no output)", nil
-	}
-
-	return output, nil
 }

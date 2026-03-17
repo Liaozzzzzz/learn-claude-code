@@ -4,23 +4,28 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+
 	"os"
 	"strings"
 
 	"learn-claude-code/agent"
+	"learn-claude-code/agent/tools"
 )
 
 func main() {
 	// Load .env file
 	loadEnv(".env")
 
+	registry := tools.DefaultRegistry()
+
+	agentTools := agent.ToTools(registry.Tools())
+
 	// Create client from environment variables
 	client := agent.NewOpenAIClientFromEnv()
-	executor := agent.NewBashExecutor(".")
 
 	// Create agent with system prompt
-	system := fmt.Sprintf("You are a coding agent at %s. Use bash to solve tasks. Act, don't explain.", mustGetwd())
-	ag := agent.New(client, executor, system, agent.DefaultTools())
+	system := fmt.Sprintf("You are a coding agent at %s. Use tools to solve tasks. Act, don't explain.", mustGetwd())
+	ag := agent.New(client, registry.AsExecutor(), system, agentTools)
 
 	// Interactive REPL
 	history := []agent.Message{}
