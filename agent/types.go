@@ -83,6 +83,11 @@ type BackgroundNotifier interface {
 	DrainNotifications() string
 }
 
+// InboxChecker defines the interface for checking and draining inbox messages.
+type InboxChecker interface {
+	ReadInboxJSON(name string) string
+}
+
 // Agent represents an AI agent.
 type Agent struct {
 	Client            LLMClient
@@ -91,6 +96,8 @@ type Agent struct {
 	Tools             []Tool
 	MaxTokens         int
 	BackgroundManager BackgroundNotifier
+	InboxChecker      InboxChecker
+	InboxName         string // Name for inbox checking (e.g., "lead")
 }
 
 // New creates a new Agent with default configuration.
@@ -107,4 +114,10 @@ func New(client LLMClient, executor ToolExecutor, system string, tools []Tool) *
 // SetBackgroundManager sets the background manager for notification draining.
 func (a *Agent) SetBackgroundManager(bm BackgroundNotifier) {
 	a.BackgroundManager = bm
+}
+
+// SetInboxChecker sets the inbox checker and name for inbox checking.
+func (a *Agent) SetInboxChecker(ic InboxChecker, name string) {
+	a.InboxChecker = ic
+	a.InboxName = name
 }

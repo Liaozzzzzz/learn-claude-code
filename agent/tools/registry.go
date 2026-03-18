@@ -203,3 +203,23 @@ func (r *Registry) GetChildToolDefinitions() []Definition {
 	}
 	return defs
 }
+
+// DefaultRegistryWithTeam creates a registry with all tools including team features.
+func DefaultRegistryWithTeam(workDir, skillsDir string) (*Registry, *TodoManager, *SkillLoader, *BackgroundManager, *MessageBus, *TeammateManager) {
+	r, todoManager, skillLoader, bgManager := DefaultRegistryWithTodoAndSkills(workDir, skillsDir)
+
+	// Create team directory and components
+	teamDir := filepath.Join(workDir, ".team")
+	inboxDir := filepath.Join(teamDir, "inbox")
+	bus := NewMessageBus(inboxDir)
+	teamManager := NewTeammateManager(teamDir, bus)
+
+	// Register team tools
+	r.Register("spawn_teammate", SpawnTeammateDefinition(), NewSpawnTeammateHandler(teamManager))
+	r.Register("list_teammates", ListTeammatesDefinition(), NewListTeammatesHandler(teamManager))
+	r.Register("send_message", SendMessageDefinition(), NewSendMessageHandler(bus, "lead"))
+	r.Register("read_inbox", ReadInboxToolDefinition(), NewReadInboxHandler(bus, "lead"))
+	r.Register("broadcast", BroadcastDefinition(), NewBroadcastHandler(bus, "lead", teamManager.MemberNames))
+
+	return r, todoManager, skillLoader, bgManager, bus, teamManager
+}

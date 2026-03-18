@@ -25,8 +25,8 @@ func main() {
 		skillsDir = "skills"
 	}
 
-	// Create registry with todo, skills, tasks, and background
-	registry, _, skillLoader, bgManager := tools.DefaultRegistryWithTodoAndSkills(workDir, skillsDir)
+	// Create registry with all tools including team features
+	registry, _, skillLoader, bgManager, bus, teamManager := tools.DefaultRegistryWithTeam(workDir, skillsDir)
 
 	// Get child tools for subagent (excludes task to prevent recursion)
 	childToolDefs := registry.GetChildToolDefinitions()
@@ -42,6 +42,15 @@ func main() {
 
 	// Set background manager for notification draining
 	ag.SetBackgroundManager(bgManager)
+
+	// Set inbox checker for team communication
+	ag.SetInboxChecker(bus, "lead")
+
+	// Set up teammate runner
+	teamManager.SetTeammateRun(func(name, role, prompt string) error {
+		runner := agent.NewTeammateRunner(client, workDir, bus, teamManager, registry)
+		return runner.Run(name, role, prompt)
+	})
 
 	// Register subagent task tool with a subagent run function
 	subagentHandler := tools.NewTaskHandler(func(ctx context.Context, prompt string) (string, error) {
@@ -73,6 +82,8 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	fmt.Println("Agent CLI (type 'q' or 'exit' to quit)")
+	fmt.Println("  /team  - list teammates")
+	fmt.Println("  /inbox - check lead inbox")
 	if skillLoader.HasSkills() {
 		fmt.Printf("Skills loaded: %s\n", strings.Join(skillLoader.SkillNames(), ", "))
 	}
@@ -91,6 +102,16 @@ func main() {
 
 		if query == "q" || query == "exit" {
 			break
+		}
+
+		// Handle special commands
+		if query == "/team" {
+			fmt.Println(teamManager.ListAll())
+			continue
+		}
+		if query == "/inbox" {
+			fmt.Println(bus.ReadInboxJSON("lead"))
+			continue
 		}
 
 		// Add user message to history
@@ -126,10 +147,11 @@ func main() {
 func buildSystemPrompt(workDir string, skillLoader *tools.SkillLoader) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("You are a coding agent at %s. ", workDir))
+	sb.WriteString(fmt.Sprintf("You are a team lead at %s. ", workDir))
 	sb.WriteString("Use the todo tool to plan multi-step tasks. ")
 	sb.WriteString("Use task_create/task_update/task_list to track persistent tasks with dependencies. ")
 	sb.WriteString("Use background_run for long-running commands (fire and forget). Use check_background to get results. ")
+	sb.WriteString("Use spawn_teammate to spawn persistent teammates that run in parallel. Use send_message and read_inbox to communicate. ")
 	sb.WriteString("Use the subagent tool to delegate exploration or subtasks. ")
 	sb.WriteString("Prefer tools over prose. ")
 

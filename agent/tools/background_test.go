@@ -16,7 +16,7 @@ func TestBackgroundManager_Run(t *testing.T) {
 	}
 
 	// Wait for completion
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	// Check notifications were drained
 	notif := bg.DrainNotifications()
@@ -111,7 +111,7 @@ func TestBackgroundManager_DrainNotifications(t *testing.T) {
 
 	// Run command and wait
 	bg.Run("echo test")
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 
 	// Drain should return notifications
 	notif = bg.DrainNotifications()

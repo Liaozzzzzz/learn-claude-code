@@ -52,6 +52,21 @@ func (a *Agent) RunWithNagAndCompact(ctx context.Context, messages *[]Message, n
 			}
 		}
 
+		// Check inbox and inject messages before LLM call
+		if a.InboxChecker != nil && a.InboxName != "" {
+			inboxJSON := a.InboxChecker.ReadInboxJSON(a.InboxName)
+			if inboxJSON != "" && inboxJSON != "[]" && len(*messages) > 0 {
+				*messages = append(*messages, Message{
+					Role:    "user",
+					Content: fmt.Sprintf("<inbox>\n%s\n</inbox>", inboxJSON),
+				})
+				*messages = append(*messages, Message{
+					Role:    "assistant",
+					Content: "Noted inbox messages.",
+				})
+			}
+		}
+
 		// Layer 1: micro_compact before each LLM call
 		if compactConfig != nil {
 			*messages = MicroCompact(*messages, compactConfig.KeepRecent)
