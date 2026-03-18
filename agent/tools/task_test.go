@@ -8,8 +8,8 @@ import (
 func TestTaskDefinition(t *testing.T) {
 	def := TaskDefinition()
 
-	if def.Name != "task" {
-		t.Errorf("expected name 'task', got %q", def.Name)
+	if def.Name != "subagent" {
+		t.Errorf("expected name 'subagent', got %q", def.Name)
 	}
 
 	if def.InputSchema.Type != "object" {

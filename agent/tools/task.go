@@ -4,10 +4,10 @@ import (
 	"context"
 )
 
-// TaskDefinition returns the tool definition for the task tool.
+// TaskDefinition returns the tool definition for the subagent tool.
 func TaskDefinition() Definition {
 	return Definition{
-		Name:        "task",
+		Name:        "subagent",
 		Description: "Spawn a subagent with fresh context. It shares the filesystem but not conversation history. Use for exploration or subtasks that benefit from isolation.",
 		InputSchema: InputSchema{
 			Type: "object",

@@ -132,6 +132,17 @@ func DefaultRegistryWithTodoAndSkills(workDir, skillsDir string) (*Registry, *To
 		r.Register("load_skill", SkillDefinition(), NewSkillHandler(skillLoader))
 	}
 
+	// Create tasks directory and manager
+	tasksDir := filepath.Join(workDir, ".tasks")
+	taskManager := NewTaskManager(tasksDir)
+
+	// Register task tools
+	r.Register("task_create", TaskCreateDefinition(), NewTaskCreateHandler(taskManager))
+	r.Register("task_update", TaskUpdateDefinition(), NewTaskUpdateHandler(taskManager))
+	r.Register("task_list", TaskListDefinition(), NewTaskListHandler(taskManager))
+	r.Register("task_get", TaskGetDefinition(), NewTaskGetHandler(taskManager))
+	r.Register("task_delete", TaskDeleteDefinition(), NewTaskDeleteHandler(taskManager))
+
 	// Register compact tool (handler is a placeholder - actual logic in agent loop)
 	r.RegisterFunc("compact", Definition{
 		Name:        "compact",
@@ -150,6 +161,13 @@ func DefaultRegistryWithTodoAndSkills(workDir, skillsDir string) (*Registry, *To
 	})
 
 	return r, todoManager, skillLoader
+}
+
+// TaskManagerFromRegistry extracts the TaskManager from a registry that has tasks registered.
+// This is a convenience function for callers that need access to the TaskManager.
+func TaskManagerFromRegistry(workDir string) *TaskManager {
+	tasksDir := filepath.Join(workDir, ".tasks")
+	return NewTaskManager(tasksDir)
 }
 
 // NewRegistryWithWorkDirAndTodo creates a registry with all standard tools including todo.
