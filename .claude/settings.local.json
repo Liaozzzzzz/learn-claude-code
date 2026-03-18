@@ -10,7 +10,9 @@
       "Bash(curl:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(go build:*)",
+      "Bash(cp:*)"
     ]
   }
 }
