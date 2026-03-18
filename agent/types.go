@@ -77,13 +77,20 @@ type ToolExecutor interface {
 	Execute(name string, input map[string]interface{}) (string, error)
 }
 
+// BackgroundNotifier defines the interface for draining background task notifications.
+// Returns notifications as a formatted string for injection into messages.
+type BackgroundNotifier interface {
+	DrainNotifications() string
+}
+
 // Agent represents an AI agent.
 type Agent struct {
-	Client    LLMClient
-	Executor  ToolExecutor
-	System    string
-	Tools     []Tool
-	MaxTokens int
+	Client            LLMClient
+	Executor          ToolExecutor
+	System            string
+	Tools             []Tool
+	MaxTokens         int
+	BackgroundManager BackgroundNotifier
 }
 
 // New creates a new Agent with default configuration.
@@ -95,4 +102,9 @@ func New(client LLMClient, executor ToolExecutor, system string, tools []Tool) *
 		Tools:     tools,
 		MaxTokens: 8000,
 	}
+}
+
+// SetBackgroundManager sets the background manager for notification draining.
+func (a *Agent) SetBackgroundManager(bm BackgroundNotifier) {
+	a.BackgroundManager = bm
 }

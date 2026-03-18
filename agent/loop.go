@@ -37,6 +37,21 @@ func (a *Agent) RunWithNagAndCompact(ctx context.Context, messages *[]Message, n
 	roundsWithoutTool := 0
 
 	for {
+		// Drain background task notifications and inject as system message before LLM call
+		if a.BackgroundManager != nil {
+			notifText := a.BackgroundManager.DrainNotifications()
+			if notifText != "" && len(*messages) > 0 {
+				*messages = append(*messages, Message{
+					Role:    "user",
+					Content: fmt.Sprintf("<background-results>\n%s\n</background-results>", notifText),
+				})
+				*messages = append(*messages, Message{
+					Role:    "assistant",
+					Content: "Noted background results.",
+				})
+			}
+		}
+
 		// Layer 1: micro_compact before each LLM call
 		if compactConfig != nil {
 			*messages = MicroCompact(*messages, compactConfig.KeepRecent)

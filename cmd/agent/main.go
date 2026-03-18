@@ -25,8 +25,8 @@ func main() {
 		skillsDir = "skills"
 	}
 
-	// Create registry with todo, skills, and tasks
-	registry, _, skillLoader := tools.DefaultRegistryWithTodoAndSkills(workDir, skillsDir)
+	// Create registry with todo, skills, tasks, and background
+	registry, _, skillLoader, bgManager := tools.DefaultRegistryWithTodoAndSkills(workDir, skillsDir)
 
 	// Get child tools for subagent (excludes task to prevent recursion)
 	childToolDefs := registry.GetChildToolDefinitions()
@@ -39,6 +39,9 @@ func main() {
 
 	// Create agent first (will register task tool later)
 	ag := agent.New(client, registry.AsExecutor(), system, nil)
+
+	// Set background manager for notification draining
+	ag.SetBackgroundManager(bgManager)
 
 	// Register subagent task tool with a subagent run function
 	subagentHandler := tools.NewTaskHandler(func(ctx context.Context, prompt string) (string, error) {
@@ -126,6 +129,7 @@ func buildSystemPrompt(workDir string, skillLoader *tools.SkillLoader) string {
 	sb.WriteString(fmt.Sprintf("You are a coding agent at %s. ", workDir))
 	sb.WriteString("Use the todo tool to plan multi-step tasks. ")
 	sb.WriteString("Use task_create/task_update/task_list to track persistent tasks with dependencies. ")
+	sb.WriteString("Use background_run for long-running commands (fire and forget). Use check_background to get results. ")
 	sb.WriteString("Use the subagent tool to delegate exploration or subtasks. ")
 	sb.WriteString("Prefer tools over prose. ")
 

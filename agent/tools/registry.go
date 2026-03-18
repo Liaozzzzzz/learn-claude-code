@@ -119,7 +119,7 @@ func DefaultRegistryWithTodo() (*Registry, *TodoManager) {
 }
 
 // DefaultRegistryWithTodoAndSkills creates a registry with all standard tools including todo and skills.
-func DefaultRegistryWithTodoAndSkills(workDir, skillsDir string) (*Registry, *TodoManager, *SkillLoader) {
+func DefaultRegistryWithTodoAndSkills(workDir, skillsDir string) (*Registry, *TodoManager, *SkillLoader, *BackgroundManager) {
 	r := NewRegistryWithWorkDir(workDir)
 
 	// Create and register todo tool
@@ -143,6 +143,11 @@ func DefaultRegistryWithTodoAndSkills(workDir, skillsDir string) (*Registry, *To
 	r.Register("task_get", TaskGetDefinition(), NewTaskGetHandler(taskManager))
 	r.Register("task_delete", TaskDeleteDefinition(), NewTaskDeleteHandler(taskManager))
 
+	// Create and register background tools
+	bgManager := NewBackgroundManager(workDir)
+	r.Register("background_run", BackgroundRunDefinition(), NewBackgroundRunHandler(bgManager))
+	r.Register("check_background", CheckBackgroundDefinition(), NewCheckBackgroundHandler(bgManager))
+
 	// Register compact tool (handler is a placeholder - actual logic in agent loop)
 	r.RegisterFunc("compact", Definition{
 		Name:        "compact",
@@ -160,7 +165,7 @@ func DefaultRegistryWithTodoAndSkills(workDir, skillsDir string) (*Registry, *To
 		return "Compressing...", nil
 	})
 
-	return r, todoManager, skillLoader
+	return r, todoManager, skillLoader, bgManager
 }
 
 // TaskManagerFromRegistry extracts the TaskManager from a registry that has tasks registered.
