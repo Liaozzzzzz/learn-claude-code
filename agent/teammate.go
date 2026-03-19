@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"learn-claude-code/agent/tools"
 )
 
-// TeammateRunner runs a teammate's agent loop.
+// TeammateRunner runs a teammate's agent loop with autonomous behavior.
 type TeammateRunner struct {
 	Client   LLMClient
 	WorkDir  string
@@ -16,6 +17,8 @@ type TeammateRunner struct {
 	Manager  *tools.TeammateManager
 	Registry *tools.Registry
 	Tracker  *tools.RequestTracker
+	TaskMgr  *tools.TaskManager
+	Config   *tools.AutonomousConfig
 }
 
 // NewTeammateRunner creates a new teammate runner.
@@ -27,16 +30,37 @@ func NewTeammateRunner(client LLMClient, workDir string, bus *tools.MessageBus, 
 		Manager:  manager,
 		Registry: registry,
 		Tracker:  tracker,
+		Config:   tools.DefaultAutonomousConfig(),
 	}
 }
 
-// Run executes the teammate's agent loop.
+// NewAutonomousTeammateRunner creates a teammate runner with autonomous capabilities.
+func NewAutonomousTeammateRunner(client LLMClient, workDir string, bus *tools.MessageBus, manager *tools.TeammateManager, registry *tools.Registry, tracker *tools.RequestTracker, taskMgr *tools.TaskManager) *TeammateRunner {
+	return &TeammateRunner{
+		Client:   client,
+		WorkDir:  workDir,
+		Bus:      bus,
+		Manager:  manager,
+		Registry: registry,
+		Tracker:  tracker,
+		TaskMgr:  taskMgr,
+		Config:   tools.DefaultAutonomousConfig(),
+	}
+}
+
+// Run executes the teammate's agent loop with autonomous behavior.
 func (r *TeammateRunner) Run(name, role, prompt string) error {
 	// Build teammate-specific tools
 	teammateRegistry := r.buildTeammateTools(name)
 
-	// Create agent with teammate tools
-	sysPrompt := fmt.Sprintf("You are '%s', role: %s, at %s. Submit plans via plan_approval_submit before major work. Respond to shutdown_request with shutdown_response. Complete your task and mark yourself idle when done.", name, role, r.WorkDir)
+	// Get team name for identity injection
+	teamName := "default"
+	if r.Manager != nil {
+		teamName = r.Manager.TeamName()
+	}
+
+	// Create system prompt
+	sysPrompt := fmt.Sprintf("You are '%s', role: %s, team: %s, at %s. Submit plans via plan_approval_submit before major work. Respond to shutdown_request with shutdown_response. Use idle tool when you have no more work. You will auto-claim new tasks.", name, role, teamName, r.WorkDir)
 	ag := New(r.Client, teammateRegistry.AsExecutor(), sysPrompt, ToTools(teammateRegistry.Tools()))
 
 	// Run agent with initial prompt
@@ -45,37 +69,68 @@ func (r *TeammateRunner) Run(name, role, prompt string) error {
 		{Role: "user", Content: prompt},
 	}
 
-	// Run with inbox checking
-	if err := r.runWithInbox(ctx, ag, name, &messages); err != nil {
+	// Run autonomous loop
+	if err := r.runAutonomous(ctx, ag, name, role, teamName, &messages); err != nil {
 		fmt.Printf("[%s] error: %v\n", name, err)
 	}
 
-	// Set status to idle when done
-	r.Manager.SetStatus(name, "idle")
+	// Set status to shutdown when done
+	r.Manager.SetStatus(name, "shutdown")
 	return nil
 }
 
-// runWithInbox runs the agent loop with inbox checking before each LLM call.
-func (r *TeammateRunner) runWithInbox(ctx context.Context, ag *Agent, name string, messages *[]Message) error {
+// runAutonomous implements the WORK/IDLE lifecycle.
+func (r *TeammateRunner) runAutonomous(ctx context.Context, ag *Agent, name, role, teamName string, messages *[]Message) error {
+	for {
+		// -- WORK PHASE: standard agent loop --
+		idleRequested, err := r.runWorkPhase(ctx, ag, name, messages)
+		if err != nil {
+			return err
+		}
+
+		// If no idle request and not tool_use, we're done
+		if !idleRequested {
+			return nil
+		}
+
+		// -- IDLE PHASE: poll for inbox messages and unclaimed tasks --
+		resume, err := r.runIdlePhase(ctx, name, role, teamName, messages)
+		if err != nil {
+			return err
+		}
+
+		// If no resume, shutdown
+		if !resume {
+			return nil
+		}
+
+		// Resume work phase
+		r.Manager.SetStatus(name, "working")
+	}
+}
+
+// runWorkPhase runs the work phase until idle or done.
+func (r *TeammateRunner) runWorkPhase(ctx context.Context, ag *Agent, name string, messages *[]Message) (bool, error) {
 	for {
 		// Check inbox before each LLM call
 		inbox := r.Bus.ReadInbox(name)
-		if len(inbox) > 0 {
-			inboxJSON, _ := json.MarshalIndent(inbox, "", "  ")
+		for _, msg := range inbox {
+			// Check for shutdown request
+			if msg.Type == "shutdown_request" {
+				r.Manager.SetStatus(name, "shutdown")
+				return false, nil
+			}
+			msgJSON, _ := json.Marshal(msg)
 			*messages = append(*messages, Message{
 				Role:    "user",
-				Content: fmt.Sprintf("<inbox>%s</inbox>", string(inboxJSON)),
-			})
-			*messages = append(*messages, Message{
-				Role:    "assistant",
-				Content: "Noted inbox messages.",
+				Content: string(msgJSON),
 			})
 		}
 
 		// Call LLM
 		response, err := ag.Client.CreateMessage(ctx, ag.System, *messages, ag.Tools)
 		if err != nil {
-			return fmt.Errorf("LLM call failed: %w", err)
+			return false, fmt.Errorf("LLM call failed: %w", err)
 		}
 
 		// Append assistant turn
@@ -86,13 +141,25 @@ func (r *TeammateRunner) runWithInbox(ctx context.Context, ag *Agent, name strin
 
 		// If the model didn't call a tool, we're done
 		if response.StopReason != "tool_use" {
-			return nil
+			return false, nil
 		}
 
 		// Execute each tool call, collect results
 		var results []ToolResultContent
+		idleRequested := false
 		for _, block := range response.Content {
 			if block.Type == "tool_use" {
+				// Check for idle tool
+				if block.Name == "idle" {
+					idleRequested = true
+					results = append(results, ToolResultContent{
+						Type:      "tool_result",
+						ToolUseID: block.ID,
+						Content:   "Entering idle phase. Will poll for new tasks.",
+					})
+					continue
+				}
+
 				output, err := ag.Executor.Execute(block.Name, block.Input)
 				if err != nil {
 					results = append(results, ToolResultContent{
@@ -117,7 +184,85 @@ func (r *TeammateRunner) runWithInbox(ctx context.Context, ag *Agent, name strin
 			Role:    "user",
 			Content: results,
 		})
+
+		// If idle was requested, return
+		if idleRequested {
+			return true, nil
+		}
 	}
+}
+
+// runIdlePhase runs the idle phase, polling for work.
+func (r *TeammateRunner) runIdlePhase(ctx context.Context, name, role, teamName string, messages *[]Message) (bool, error) {
+	r.Manager.SetStatus(name, "idle")
+
+	pollInterval := r.Config.PollInterval
+	idleTimeout := r.Config.IdleTimeout
+	polls := int(idleTimeout / pollInterval)
+
+	for i := 0; i < polls; i++ {
+		time.Sleep(pollInterval)
+
+		// Check inbox
+		inbox := r.Bus.ReadInbox(name)
+		for _, msg := range inbox {
+			// Check for shutdown request
+			if msg.Type == "shutdown_request" {
+				r.Manager.SetStatus(name, "shutdown")
+				return false, nil
+			}
+			msgJSON, _ := json.Marshal(msg)
+			*messages = append(*messages, Message{
+				Role:    "user",
+				Content: string(msgJSON),
+			})
+		}
+		if len(inbox) > 0 {
+			*messages = append(*messages, Message{
+				Role:    "assistant",
+				Content: fmt.Sprintf("Received %d message(s). Resuming work.", len(inbox)),
+			})
+			return true, nil
+		}
+
+		// Scan for unclaimed tasks
+		if r.TaskMgr != nil {
+			result, err := tools.TryAutoClaim(r.TaskMgr, name)
+			if err != nil {
+				continue
+			}
+			if result.Claimed && result.Task != nil {
+				// Inject identity if needed (after context compression)
+				if len(*messages) <= 3 {
+					identityBlock := tools.MakeIdentityBlock(name, role, teamName)
+					*messages = append([]Message{{
+						Role:    identityBlock["role"].(string),
+						Content: identityBlock["content"],
+					}}, *messages...)
+					*messages = append(*messages, Message{
+						Role:    "assistant",
+						Content: fmt.Sprintf("I am %s. Continuing.", name),
+					})
+				}
+
+				// Add claimed task to messages
+				taskPrompt := fmt.Sprintf("<auto-claimed>Task #%d: %s\n%s</auto-claimed>", result.Task.ID, result.Task.Subject, result.Task.Description)
+				*messages = append(*messages, Message{
+					Role:    "user",
+					Content: taskPrompt,
+				})
+				*messages = append(*messages, Message{
+					Role:    "assistant",
+					Content: fmt.Sprintf("Claimed task #%d. Working on it.", result.Task.ID),
+				})
+				fmt.Printf("  [%s] auto-claimed task #%d\n", name, result.Task.ID)
+				return true, nil
+			}
+		}
+	}
+
+	// Timeout - shutdown
+	return false, nil
 }
 
 // buildTeammateTools builds tools for a teammate.
@@ -138,6 +283,12 @@ func (r *TeammateRunner) buildTeammateTools(name string) *tools.Registry {
 	if r.Tracker != nil {
 		reg.Register("shutdown_response", tools.ShutdownResponseDefinition(), tools.NewShutdownResponseHandler(r.Tracker, r.Bus, name))
 		reg.Register("plan_approval_submit", tools.PlanApprovalSubmitDefinition(), tools.NewPlanApprovalSubmitHandler(r.Tracker, r.Bus, name))
+	}
+
+	// Autonomous tools
+	reg.Register("idle", tools.IdleDefinition(), tools.NewIdleHandler())
+	if r.TaskMgr != nil {
+		reg.Register("claim_task", tools.ClaimTaskDefinition(), tools.NewClaimTaskHandler(r.TaskMgr, name))
 	}
 
 	return reg

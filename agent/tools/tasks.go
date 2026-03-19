@@ -347,6 +347,65 @@ func removeFromSlice(slice []int, val int) []int {
 	return result
 }
 
+// ScanUnclaimed returns tasks that are pending, have no owner, and are not blocked.
+// This is used by autonomous agents to find work.
+func (m *TaskManager) ScanUnclaimed() ([]*Task, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	files, err := filepath.Glob(filepath.Join(m.dir, "task_*.json"))
+	if err != nil {
+		return nil, err
+	}
+
+	var unclaimed []*Task
+	for _, f := range files {
+		task, err := m.loadFromFile(f)
+		if err != nil {
+			continue
+		}
+		// Task must be pending, have no owner, and not be blocked
+		if task.Status == TaskPending && task.Owner == "" && len(task.BlockedBy) == 0 {
+			unclaimed = append(unclaimed, task)
+		}
+	}
+
+	// Sort by ID (oldest first)
+	sort.Slice(unclaimed, func(i, j int) bool {
+		return unclaimed[i].ID < unclaimed[j].ID
+	})
+
+	return unclaimed, nil
+}
+
+// Claim claims a task for a specific owner.
+func (m *TaskManager) Claim(id int, owner string) (*Task, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	task, err := m.load(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only claim if pending and no owner
+	if task.Status != TaskPending {
+		return nil, fmt.Errorf("task %d is not pending", id)
+	}
+	if task.Owner != "" {
+		return nil, fmt.Errorf("task %d already owned by %s", id, task.Owner)
+	}
+
+	task.Owner = owner
+	task.Status = TaskInProgress
+
+	if err := m.save(task); err != nil {
+		return nil, err
+	}
+
+	return task, nil
+}
+
 // --- Tool Definitions and Handlers ---
 
 // TaskCreateDefinition returns the tool definition for task_create.

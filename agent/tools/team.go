@@ -268,6 +268,13 @@ func (tm *TeammateManager) MemberNames() []string {
 	return names
 }
 
+// TeamName returns the team name.
+func (tm *TeammateManager) TeamName() string {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	return tm.config.TeamName
+}
+
 // GetBus returns the message bus.
 func (tm *TeammateManager) GetBus() *MessageBus {
 	return tm.bus

@@ -239,3 +239,18 @@ func DefaultRegistryWithTeamProtocols(workDir, skillsDir string) (*Registry, *To
 
 	return r, todoManager, skillLoader, bgManager, bus, teamManager, tracker
 }
+
+// DefaultRegistryWithAutonomousTeammates creates a registry with all tools including autonomous teammates.
+func DefaultRegistryWithAutonomousTeammates(workDir, skillsDir string) (*Registry, *TodoManager, *SkillLoader, *BackgroundManager, *MessageBus, *TeammateManager, *RequestTracker, *TaskManager) {
+	r, todoManager, skillLoader, bgManager, bus, teamManager, tracker := DefaultRegistryWithTeamProtocols(workDir, skillsDir)
+
+	// Create task manager for autonomous teammates
+	tasksDir := filepath.Join(workDir, ".tasks")
+	taskManager := NewTaskManager(tasksDir)
+
+	// Register idle and claim_task tools for lead (rarely used for lead)
+	r.Register("idle", IdleDefinition(), NewIdleHandler())
+	r.Register("claim_task", ClaimTaskDefinition(), NewClaimTaskHandler(taskManager, "lead"))
+
+	return r, todoManager, skillLoader, bgManager, bus, teamManager, tracker, taskManager
+}

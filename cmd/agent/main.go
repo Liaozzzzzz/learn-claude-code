@@ -25,8 +25,8 @@ func main() {
 		skillsDir = "skills"
 	}
 
-	// Create registry with all tools including team features and protocols
-	registry, _, skillLoader, bgManager, bus, teamManager, tracker := tools.DefaultRegistryWithTeamProtocols(workDir, skillsDir)
+	// Create registry with all tools including autonomous teammates
+	registry, _, skillLoader, bgManager, bus, teamManager, tracker, taskManager := tools.DefaultRegistryWithAutonomousTeammates(workDir, skillsDir)
 
 	// Get child tools for subagent (excludes task to prevent recursion)
 	childToolDefs := registry.GetChildToolDefinitions()
@@ -46,9 +46,9 @@ func main() {
 	// Set inbox checker for team communication
 	ag.SetInboxChecker(bus, "lead")
 
-	// Set up teammate runner
+	// Set up autonomous teammate runner
 	teamManager.SetTeammateRun(func(name, role, prompt string) error {
-		runner := agent.NewTeammateRunner(client, workDir, bus, teamManager, registry, tracker)
+		runner := agent.NewAutonomousTeammateRunner(client, workDir, bus, teamManager, registry, tracker, taskManager)
 		return runner.Run(name, role, prompt)
 	})
 
@@ -74,7 +74,7 @@ func main() {
 		Threshold:     50000,
 		KeepRecent:    3,
 		TranscriptDir: ".transcripts",
-		WorkDir:      workDir,
+		WorkDir:       workDir,
 	}
 
 	// Interactive REPL
@@ -84,6 +84,7 @@ func main() {
 	fmt.Println("Agent CLI (type 'q' or 'exit' to quit)")
 	fmt.Println("  /team  - list teammates")
 	fmt.Println("  /inbox - check lead inbox")
+	fmt.Println("  /tasks - list tasks")
 	if skillLoader.HasSkills() {
 		fmt.Printf("Skills loaded: %s\n", strings.Join(skillLoader.SkillNames(), ", "))
 	}
@@ -113,6 +114,10 @@ func main() {
 			fmt.Println(bus.ReadInboxJSON("lead"))
 			continue
 		}
+		if query == "/tasks" {
+			fmt.Println(taskManager.Render())
+			continue
+		}
 
 		// Add user message to history
 		history = append(history, agent.Message{
@@ -135,6 +140,9 @@ func main() {
 						fmt.Println(block.Text)
 					}
 				}
+			} else if content, ok := lastMsg.Content.(string); ok {
+				// Handle string content
+				fmt.Println(content)
 			}
 		}
 		fmt.Println()
@@ -147,11 +155,11 @@ func main() {
 func buildSystemPrompt(workDir string, skillLoader *tools.SkillLoader) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("You are a team lead at %s. ", workDir))
+	sb.WriteString(fmt.Sprintf("You are a team lead at %s. Teammates are autonomous -- they find work themselves. ", workDir))
 	sb.WriteString("Use the todo tool to plan multi-step tasks. ")
 	sb.WriteString("Use task_create/task_update/task_list to track persistent tasks with dependencies. ")
 	sb.WriteString("Use background_run for long-running commands (fire and forget). Use check_background to get results. ")
-	sb.WriteString("Use spawn_teammate to spawn persistent teammates that run in parallel. Use send_message and read_inbox to communicate. ")
+	sb.WriteString("Use spawn_teammate to spawn autonomous teammates that run in parallel. Use send_message and read_inbox to communicate. ")
 	sb.WriteString("Use shutdown_request to request a teammate to shut down gracefully. Use check_shutdown_status to track the request. ")
 	sb.WriteString("Use list_pending_plans to see pending plan approval requests. Use plan_approval_review to approve or reject plans. ")
 	sb.WriteString("Use the subagent tool to delegate exploration or subtasks. ")
