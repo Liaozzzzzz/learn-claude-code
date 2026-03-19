@@ -248,6 +248,24 @@ func DefaultRegistryWithAutonomousTeammates(workDir, skillsDir string) (*Registr
 	tasksDir := filepath.Join(workDir, ".tasks")
 	taskManager := NewTaskManager(tasksDir)
 
+	// Create event bus for worktree events
+	worktreeDir := filepath.Join(workDir, ".worktrees")
+	eventsPath := filepath.Join(worktreeDir, "events.jsonl")
+	eventBus := NewEventBus(eventsPath)
+
+	// Create worktree manager
+	worktreeManager := NewWorktreeManager(workDir, taskManager, eventBus)
+
+	// Register worktree tools
+	r.Register("worktree_create", WorktreeCreateDefinition(), NewWorktreeCreateHandler(worktreeManager))
+	r.Register("worktree_list", WorktreeListDefinition(), NewWorktreeListHandler(worktreeManager))
+	r.Register("worktree_status", WorktreeStatusDefinition(), NewWorktreeStatusHandler(worktreeManager))
+	r.Register("worktree_run", WorktreeRunDefinition(), NewWorktreeRunHandler(worktreeManager))
+	r.Register("worktree_remove", WorktreeRemoveDefinition(), NewWorktreeRemoveHandler(worktreeManager))
+	r.Register("worktree_keep", WorktreeKeepDefinition(), NewWorktreeKeepHandler(worktreeManager))
+	r.Register("worktree_events", WorktreeEventsDefinition(), NewWorktreeEventsHandler(eventBus))
+	r.Register("task_bind_worktree", TaskBindWorktreeDefinition(), NewTaskBindWorktreeHandler(taskManager))
+
 	// Register idle and claim_task tools for lead (rarely used for lead)
 	r.Register("idle", IdleDefinition(), NewIdleHandler())
 	r.Register("claim_task", ClaimTaskDefinition(), NewClaimTaskHandler(taskManager, "lead"))

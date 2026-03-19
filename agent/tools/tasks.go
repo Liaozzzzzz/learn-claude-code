@@ -28,6 +28,7 @@ type Task struct {
 	BlockedBy   []int      `json:"blockedBy,omitempty"`
 	Blocks      []int      `json:"blocks,omitempty"`
 	Owner       string     `json:"owner,omitempty"`
+	Worktree    string     `json:"worktree,omitempty"`
 	ActiveForm  string     `json:"activeForm,omitempty"`
 }
 
@@ -321,7 +322,18 @@ func (m *TaskManager) Render() string {
 		if len(t.BlockedBy) > 0 {
 			blocked = fmt.Sprintf(" (blocked by: %v)", t.BlockedBy)
 		}
-		lines = append(lines, fmt.Sprintf("%s #%d: %s%s", marker, t.ID, t.Subject, blocked))
+
+		owner := ""
+		if t.Owner != "" {
+			owner = fmt.Sprintf(" @%s", t.Owner)
+		}
+
+		wt := ""
+		if t.Worktree != "" {
+			wt = fmt.Sprintf(" wt=%s", t.Worktree)
+		}
+
+		lines = append(lines, fmt.Sprintf("%s #%d: %s%s%s%s", marker, t.ID, t.Subject, owner, wt, blocked))
 	}
 
 	return strings.Join(lines, "\n")
