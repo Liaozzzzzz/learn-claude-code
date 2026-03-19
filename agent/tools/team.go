@@ -11,10 +11,11 @@ import (
 
 // Valid message types
 var ValidMsgTypes = map[string]bool{
-	"message":              true,
-	"broadcast":            true,
-	"shutdown_request":     true,
-	"shutdown_response":    true,
+	"message":                true,
+	"broadcast":              true,
+	"shutdown_request":       true,
+	"shutdown_response":      true,
+	"plan_approval_request":  true,
 	"plan_approval_response": true,
 }
 

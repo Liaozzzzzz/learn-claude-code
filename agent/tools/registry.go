@@ -223,3 +223,19 @@ func DefaultRegistryWithTeam(workDir, skillsDir string) (*Registry, *TodoManager
 
 	return r, todoManager, skillLoader, bgManager, bus, teamManager
 }
+
+// DefaultRegistryWithTeamProtocols creates a registry with all tools including team features and protocols.
+func DefaultRegistryWithTeamProtocols(workDir, skillsDir string) (*Registry, *TodoManager, *SkillLoader, *BackgroundManager, *MessageBus, *TeammateManager, *RequestTracker) {
+	r, todoManager, skillLoader, bgManager, bus, teamManager := DefaultRegistryWithTeam(workDir, skillsDir)
+
+	// Create request tracker for protocols
+	tracker := NewRequestTracker()
+
+	// Register protocol tools for lead
+	r.Register("shutdown_request", ShutdownRequestDefinition(), NewShutdownRequestHandler(tracker, bus))
+	r.Register("check_shutdown_status", CheckShutdownStatusDefinition(), NewCheckShutdownStatusHandler(tracker))
+	r.Register("plan_approval_review", PlanApprovalReviewDefinition(), NewPlanApprovalReviewHandler(tracker, bus))
+	r.Register("list_pending_plans", ListPendingPlansDefinition(), NewListPendingPlansHandler(tracker))
+
+	return r, todoManager, skillLoader, bgManager, bus, teamManager, tracker
+}

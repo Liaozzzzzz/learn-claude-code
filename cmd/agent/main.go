@@ -25,8 +25,8 @@ func main() {
 		skillsDir = "skills"
 	}
 
-	// Create registry with all tools including team features
-	registry, _, skillLoader, bgManager, bus, teamManager := tools.DefaultRegistryWithTeam(workDir, skillsDir)
+	// Create registry with all tools including team features and protocols
+	registry, _, skillLoader, bgManager, bus, teamManager, tracker := tools.DefaultRegistryWithTeamProtocols(workDir, skillsDir)
 
 	// Get child tools for subagent (excludes task to prevent recursion)
 	childToolDefs := registry.GetChildToolDefinitions()
@@ -48,7 +48,7 @@ func main() {
 
 	// Set up teammate runner
 	teamManager.SetTeammateRun(func(name, role, prompt string) error {
-		runner := agent.NewTeammateRunner(client, workDir, bus, teamManager, registry)
+		runner := agent.NewTeammateRunner(client, workDir, bus, teamManager, registry, tracker)
 		return runner.Run(name, role, prompt)
 	})
 
@@ -152,6 +152,8 @@ func buildSystemPrompt(workDir string, skillLoader *tools.SkillLoader) string {
 	sb.WriteString("Use task_create/task_update/task_list to track persistent tasks with dependencies. ")
 	sb.WriteString("Use background_run for long-running commands (fire and forget). Use check_background to get results. ")
 	sb.WriteString("Use spawn_teammate to spawn persistent teammates that run in parallel. Use send_message and read_inbox to communicate. ")
+	sb.WriteString("Use shutdown_request to request a teammate to shut down gracefully. Use check_shutdown_status to track the request. ")
+	sb.WriteString("Use list_pending_plans to see pending plan approval requests. Use plan_approval_review to approve or reject plans. ")
 	sb.WriteString("Use the subagent tool to delegate exploration or subtasks. ")
 	sb.WriteString("Prefer tools over prose. ")
 

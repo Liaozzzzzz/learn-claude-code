@@ -10,21 +10,23 @@ import (
 
 // TeammateRunner runs a teammate's agent loop.
 type TeammateRunner struct {
-	Client    LLMClient
-	WorkDir   string
-	Bus       *tools.MessageBus
-	Manager   *tools.TeammateManager
-	Registry  *tools.Registry
+	Client   LLMClient
+	WorkDir  string
+	Bus      *tools.MessageBus
+	Manager  *tools.TeammateManager
+	Registry *tools.Registry
+	Tracker  *tools.RequestTracker
 }
 
 // NewTeammateRunner creates a new teammate runner.
-func NewTeammateRunner(client LLMClient, workDir string, bus *tools.MessageBus, manager *tools.TeammateManager, registry *tools.Registry) *TeammateRunner {
+func NewTeammateRunner(client LLMClient, workDir string, bus *tools.MessageBus, manager *tools.TeammateManager, registry *tools.Registry, tracker *tools.RequestTracker) *TeammateRunner {
 	return &TeammateRunner{
 		Client:   client,
 		WorkDir:  workDir,
 		Bus:      bus,
 		Manager:  manager,
 		Registry: registry,
+		Tracker:  tracker,
 	}
 }
 
@@ -34,7 +36,7 @@ func (r *TeammateRunner) Run(name, role, prompt string) error {
 	teammateRegistry := r.buildTeammateTools(name)
 
 	// Create agent with teammate tools
-	sysPrompt := fmt.Sprintf("You are '%s', role: %s, at %s. Use send_message to communicate. Complete your task and mark yourself idle when done.", name, role, r.WorkDir)
+	sysPrompt := fmt.Sprintf("You are '%s', role: %s, at %s. Submit plans via plan_approval_submit before major work. Respond to shutdown_request with shutdown_response. Complete your task and mark yourself idle when done.", name, role, r.WorkDir)
 	ag := New(r.Client, teammateRegistry.AsExecutor(), sysPrompt, ToTools(teammateRegistry.Tools()))
 
 	// Run agent with initial prompt
@@ -131,6 +133,12 @@ func (r *TeammateRunner) buildTeammateTools(name string) *tools.Registry {
 	// Communication tools
 	reg.Register("send_message", tools.SendMessageDefinition(), tools.NewSendMessageHandler(r.Bus, name))
 	reg.Register("read_inbox", tools.ReadInboxToolDefinition(), tools.NewReadInboxHandler(r.Bus, name))
+
+	// Protocol tools for teammate
+	if r.Tracker != nil {
+		reg.Register("shutdown_response", tools.ShutdownResponseDefinition(), tools.NewShutdownResponseHandler(r.Tracker, r.Bus, name))
+		reg.Register("plan_approval_submit", tools.PlanApprovalSubmitDefinition(), tools.NewPlanApprovalSubmitHandler(r.Tracker, r.Bus, name))
+	}
 
 	return reg
 }
